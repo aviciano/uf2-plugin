@@ -29,7 +29,22 @@ uninstall:
 	rm -f $(R2_PLUGIN_PATH)/$(LIB)
 
 test: $(LIB)
-	@echo "TODO test"
+	@radare2 -l uf2_plugin.so -L | grep uf2
+	@radare2 -N -q \
+		-a arm -b 16 -m cortex \
+		-e asm.emu=true \
+		-c 's main; s' \
+		data/blink.elf
+	@echo "elf" && radare2 -N -q \
+		-a arm -b 16 -m cortex \
+		-e asm.emu=true \
+		-c 's 0x1000035c; af; pxf' \
+		data/blink.elf
+	@echo "uf2" && radare2 -N -q -l uf2_plugin.so \
+		-a arm -b 16 -m cortex \
+		-e asm.emu=true \
+		-c 's 0x1000035c; af; pxf' \
+		uf2://data/blink.uf2
 
 
 .PHONY: all clean install install-symlink uninstall test
