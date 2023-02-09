@@ -147,39 +147,39 @@ static bool uf2_parse(RBuffer* rbuf, char *str) {
 		// dump (&block);
 
 		if (block.magicStart0 != UF2_MAGIC_START0) {
-			eprintf ("invalid magic start 0 @ block %d\n", block.blockNo);
-			return -1;
+			R_LOG_ERROR ("uf2: Invalid magic start 0 @ block %d", block.blockNo);
+			return false;
 		}
 
 		if (block.magicStart1 != UF2_MAGIC_START1) {
-			eprintf ("invalid magic start 1 @ block %d\n", block.blockNo);
-			return -1;
+			R_LOG_ERROR ("uf2: Invalid magic start 1 @ block %d", block.blockNo);
+			return false;
 		}
 
 		if (block.magicEnd != UF2_MAGIC_END) {
-			eprintf ("invalid magic end @ block %d\n", block.blockNo);
-			return -1;
+			R_LOG_ERROR ("uf2: Invalid magic end @ block %d", block.blockNo);
+			return false;
 		}
 
 		if ((block.flags & NOT_MAIN_FLASH) != 0) {
-			eprintf ("found NOT_MAIN_FLASH flag @ block #%d, skiping\n", block.blockNo);
+			R_LOG_WARN ("uf2: Found NOT_MAIN_FLASH flag @ block #%d, skiping", block.blockNo);
 			continue;
 		}
 
 		if ((block.flags & MD5_CHECKSUM) != 0) {
-			eprintf ("found MD5_CHECKSUM flag @ block #%d, TODO\n", block.blockNo);
+			R_LOG_WARN ("uf2: Found MD5_CHECKSUM flag @ block #%d, TODO", block.blockNo);
 		}
 
 		if ((block.flags & EXTENSION_TAGS) != 0) {
-			eprintf ("found EXTENSION_TAGS flag @ block #%d, TODO\n", block.blockNo);
+			R_LOG_WARN ("uf2: Found EXTENSION_TAGS flag @ block #%d, TODO", block.blockNo);
 			// uint32_t tagsOffset = 32 + block.payloadSize;
 		}
 
 		if (r_buf_write_at (rbuf, block.targetAddr, block.data, block.payloadSize) != block.payloadSize) {
-			eprintf ("sparse buffer problem, giving up\n");
-			return -1;
+			R_LOG_ERROR ("uf2: Sparse buffer problem, giving up");
+			return false;
 		} else if (has_debug) {
-			eprintf ("block #%02d (%d bytes @ 0x%08x)\n", block.blockNo, block.payloadSize, block.targetAddr);
+			R_LOG_DEBUG ("uf2: Block #%02d (%d bytes @ 0x%08x)", block.blockNo, block.payloadSize, block.targetAddr);
 		}
 
 	} while (block.blockNo < block.numBlocks - 1);
@@ -244,7 +244,7 @@ static RIODesc *__open(RIO *io, const char *pathname, int rw, int mode) {
 	}
 
 	if (!uf2_parse (mal->rbuf, str)) {
-		eprintf ("uf2: failed to parse file\n");
+		R_LOG_ERROR ("uf2: Failed to parse UF2 file");
 		free (str);
 		r_buf_free (mal->rbuf);
 		free (mal);
