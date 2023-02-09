@@ -21,14 +21,14 @@ install: $(LIB)
 	mkdir -p $(R2_PLUGIN_PATH)
 	cp -f $(LIB) $(R2_PLUGIN_PATH)
 
-install-symlink:
+install-symlink: $(LIB)
 	mkdir -p $(R2_PLUGIN_PATH)
 	ln -s $(CWD)/$(LIB) $(R2_PLUGIN_PATH)/$(LIB)
 
 uninstall:
 	rm -f $(R2_PLUGIN_PATH)/$(LIB)
 
-test:
+test: $(LIB)
 	@echo "TODO test"
 
 
