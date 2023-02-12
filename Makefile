@@ -9,10 +9,11 @@ OBJS=$(NAME).o
 LIB=$(NAME).$(LIBEXT)
 CWD=$(shell pwd)
 
-all: $(LIB)
+all: $(LIB) compile_flags.txt
 
 clean:
 	rm -f $(LIB) $(OBJS)
+	rm -f compile_flags.txt
 
 $(LIB): $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) -o $(LIB)
@@ -46,5 +47,12 @@ test: $(LIB)
 		-c 's 0x1000035c; af; pxf' \
 		uf2://data/blink.uf2
 
+compile_flags.txt:
+	touch $@
+	echo "-Wall" >> $@
+	echo "-I$(shell r2 -H R2_INCDIR)/sdb" >> $@
+	echo "-I$(shell r2 -H R2_INCDIR)" >> $@
+	echo "-L$(shell r2 -H R2_LIBDIR)" >> $@
+	echo "-lr_anal" >> $@
 
 .PHONY: all clean install install-symlink uninstall test
