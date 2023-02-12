@@ -1,8 +1,9 @@
 /* radare - LGPL - Copyright 2023 - aviciano */
 
-#include <r_types.h>
+#include <r_core.h>
 #include <r_io.h>
 #include <r_lib.h>
+#include <r_types.h>
 
 #define UF2_MAGIC_START0 0x0A324655UL // "UF2\n"
 #define UF2_MAGIC_START1 0x9E5D5157UL // Randomly selected
@@ -121,14 +122,31 @@ static void dump(UF2_Block *block) {
 }
 #endif
 
-static bool uf2_parse(RBuffer* rbuf, char *str) {
-	// int i = 0;
-	// while (i < 512) {
-	// 	eprintf ("%02x ", str[i++] & 0xff);
-	// 	if (i % 16 == 0) eprintf("\n");
-	// }
+static void process_family_id (RCore *core, uint32_t family_id) {
+	Sdb *sdb = sdb_new0 ();
+	if (sdb_open (sdb, "uf2families.sdb") < 0) {
+		R_LOG_ERROR ("uf2: uf2families.sdb not fund");
+	} else {
+		const char *id = r_str_newf ("0x%08x", family_id);
+		const char *name = sdb_array_get (sdb, id, 0, NULL);
+		const char *desc = sdb_array_get (sdb, id, 1, NULL);
+		const char *arch = sdb_array_get (sdb, id, 2, NULL);
+		const char *bits = sdb_array_get (sdb, id, 3, NULL);
+		const char *cpu = sdb_array_get (sdb, id, 4, NULL);
+		R_LOG_DEBUG ("uf2: Family ID %s => { name:%s, desc:%s, arch:%s, bits:%s, cpu:%s }",
+				id, name, desc, arch, bits, cpu);
+		if (arch && arch[0] != '\0') r_core_cmdf (core, "e asm.arch=%s", arch);
+		if (bits && bits[0] != '\0') r_core_cmdf (core, "e asm.bits=%s", bits);
+		if (cpu && cpu[0] != '\0') r_core_cmdf (core, "e asm.cpu=%s", cpu);
+	}
+	sdb_free (sdb);
+}
+
+static bool uf2_parse(RIO *io, RBuffer* rbuf, char *str) {
 
 	bool has_debug = r_sys_getenv_asbool ("R2_DEBUG");
+	uint32_t family_id = 0;
+	RCore *core = io->coreb.core;
 
 	UF2_Block block;
 	do {
@@ -164,6 +182,18 @@ static bool uf2_parse(RBuffer* rbuf, char *str) {
 		if ((block.flags & NOT_MAIN_FLASH) != 0) {
 			R_LOG_WARN ("uf2: Found NOT_MAIN_FLASH flag @ block #%d, skiping", block.blockNo);
 			continue;
+		}
+
+		if ((block.flags & FAMILY_ID) != 0) {
+			// R_LOG_DEBUG ("uf2: Found FAMILY_ID flag @ block #%d", block.blockNo);
+			bool new_family_id = family_id != block.fileSize;
+			if (new_family_id) {
+				if (family_id != 0) {
+					R_LOG_WARN ("uf2: Family ID 0x%08x changed", block.fileSize);
+				}
+				process_family_id (core, block.fileSize);
+				family_id =  block.fileSize;
+			}
 		}
 
 		if ((block.flags & MD5_CHECKSUM) != 0) {
@@ -243,7 +273,7 @@ static RIODesc *__open(RIO *io, const char *pathname, int rw, int mode) {
 		return NULL;
 	}
 
-	if (!uf2_parse (mal->rbuf, str)) {
+	if (!uf2_parse (io, mal->rbuf, str)) {
 		R_LOG_ERROR ("uf2: Failed to parse UF2 file");
 		free (str);
 		r_buf_free (mal->rbuf);

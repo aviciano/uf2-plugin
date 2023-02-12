@@ -9,13 +9,15 @@ OBJS=$(NAME).o
 LIB=$(NAME).$(LIBEXT)
 CWD=$(shell pwd)
 
-all: $(LIB) compile_flags.txt
+all: $(LIB) uf2families.sdb compile_flags.txt
 
 clean:
 	rm -f $(LIB) $(OBJS)
 	rm -f compile_flags.txt
+	rm -f uf2families.sdb
+	rm -f uf2families.sdb.txt
 
-$(LIB): $(OBJS)
+$(LIB): $(OBJS) uf2families.sdb
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) -o $(LIB)
 
 install: $(LIB)
@@ -46,6 +48,12 @@ test: $(LIB)
 		-e asm.emu=true \
 		-c 's 0x1000035c; af; pxf' \
 		uf2://data/blink.uf2
+
+uf2families.sdb.txt: uf2families.json
+	@python3 uf2families_to_sdb.py > $@
+
+uf2families.sdb: uf2families.sdb.txt
+	@sdb $@ = < $?
 
 compile_flags.txt:
 	touch $@
