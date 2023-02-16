@@ -160,6 +160,7 @@ static bool uf2_parse(RIO *io, RBuffer *rbuf, char *str) {
 	bool has_debug = r_sys_getenv_asbool ("R2_DEBUG");
 	uint32_t family_id = 0;
 	RCore *core = io->coreb.core;
+	char *comment = NULL;
 
 	UF2_Block block;
 	do {
@@ -265,6 +266,10 @@ static bool uf2_parse(RIO *io, RBuffer *rbuf, char *str) {
 		if (has_debug) {
 			R_LOG_DEBUG ("uf2: Block #%02d (%d bytes @ 0x%08x)", block.blockNo, block.payloadSize, block.targetAddr);
 		}
+
+		comment = r_str_newf ("uf2 block #%02d (%d bytes @ 0x%08x)\n", block.blockNo, block.payloadSize, block.targetAddr);
+		r_meta_set_string (core->anal, R_META_TYPE_COMMENT, block.targetAddr, comment);
+		free (comment);
 
 	} while (block.blockNo < block.numBlocks - 1);
 
