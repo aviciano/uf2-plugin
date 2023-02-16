@@ -21,6 +21,13 @@ enum UF2_Flags {
 	EXTENSION_TAGS = 0x1 << 15,
 };
 
+
+#define ETAG_DESCRIPTION 0x650d9d // description of device for which the firmware file is destined (UTF8)
+#define ETAG_FW_VERSION  0x9fc7bc // version of firmware file - UTF8 semver string
+#define ETAG_PAGE_SIZE   0x0be9f7 // page size of target device (32 bit unsigned number)
+#define ETAG_FW_CHECKSUM 0xb46db0 // SHA-2 checksum of firmware (can be of various size)
+#define ETAG_DEVICE_ID   0xc8a729 // device type identifier - a refinement of familyID meant to identify a kind of device (eg., a toaster with specific pinout and heating unit), not only MCU; 32 or 64 bit number; can be hash of 0x650d9d
+
 typedef struct {
 	// 32 byte header
 	uint32_t magicStart0; // First magic number, 0x0A324655 ("UF2\n")
@@ -142,7 +149,13 @@ static void process_family_id (RCore *core, uint32_t family_id) {
 	sdb_free (sdb);
 }
 
-static bool uf2_parse(RIO *io, RBuffer* rbuf, char *str) {
+static inline int pad(int offset, int n) {
+	return (offset % n != 0
+		? (offset / n + 1)
+		: (offset / n)) * n;
+}
+
+static bool uf2_parse(RIO *io, RBuffer *rbuf, char *str) {
 
 	bool has_debug = r_sys_getenv_asbool ("R2_DEBUG");
 	uint32_t family_id = 0;
@@ -150,16 +163,16 @@ static bool uf2_parse(RIO *io, RBuffer* rbuf, char *str) {
 
 	UF2_Block block;
 	do {
-		block.magicStart0 = *(uint32_t*)(str + 0x00); // First magic number, 0x0A324655 ("UF2\n")
-		block.magicStart1 = *(uint32_t*)(str + 0x04); // Second magic number, 0x9E5D5157
-		block.flags       = *(uint32_t*)(str + 0x08);
-		block.targetAddr  = *(uint32_t*)(str + 0x0c); // Address in flash where the data should be written
-		block.payloadSize = *(uint32_t*)(str + 0x10); // Number of bytes used in data (often 256)
-		block.blockNo     = *(uint32_t*)(str + 0x14); // Sequential block number; starts at 0
-		block.numBlocks   = *(uint32_t*)(str + 0x18); // Total number of blocks in file
-		block.fileSize    = *(uint32_t*)(str + 0x1c); // File size or board family ID or zero
-		block.data        = (str + 0x20); // Raw Data, padded with zeros [476]
-		block.magicEnd    = *(uint32_t*)(str + 0x1fc); // Final magic number, 0x0AB16F30
+		block.magicStart0 = *(uint32_t *)(str + 0x00); // First magic number, 0x0A324655 ("UF2\n")
+		block.magicStart1 = *(uint32_t *)(str + 0x04); // Second magic number, 0x9E5D5157
+		block.flags       = *(uint32_t *)(str + 0x08);
+		block.targetAddr  = *(uint32_t *)(str + 0x0c); // Address in flash where the data should be written
+		block.payloadSize = *(uint32_t *)(str + 0x10); // Number of bytes used in data (often 256)
+		block.blockNo     = *(uint32_t *)(str + 0x14); // Sequential block number; starts at 0
+		block.numBlocks   = *(uint32_t *)(str + 0x18); // Total number of blocks in file
+		block.fileSize    = *(uint32_t *)(str + 0x1c); // File size or board family ID or zero
+		block.data        = (uint8_t *)(str + 0x20); // Raw Data, padded with zeros [476]
+		block.magicEnd    = *(uint32_t *)(str + 0x1fc); // Final magic number, 0x0AB16F30
 		str += 512;
 
 		// dump (&block);
@@ -181,7 +194,22 @@ static bool uf2_parse(RIO *io, RBuffer* rbuf, char *str) {
 
 		if ((block.flags & NOT_MAIN_FLASH) != 0) {
 			R_LOG_WARN ("uf2: Found NOT_MAIN_FLASH flag @ block #%d, skiping", block.blockNo);
+			// this block should be skipped when writing the device flash;
+			// it can be used to store "comments" in the file, typically embedded source code
+			// or debug info that does not fit on the device flash
 			continue;
+		}
+
+		if ((block.flags & FILE_CONTAINER) != 0) {
+			// It is also possible to use the UF2 format as a container for one or more
+			// regular files (akin to a TAR file, or ZIP archive without compression).
+			// This is useful when the embedded device being flashed sports a file system.
+			// The field fileSize holds the file size of the current file,
+			// and the field targetAddr holds the offset in current file.
+			// The file name is stored at &data[payloadSize] and terminated with a 0x00.
+			uint8_t *file_name = (uint8_t *)(block.data + block.payloadSize);
+			R_LOG_WARN ("uf2: Found FILE_CONTAINER flag @ block #%d, TODO %s [%d/%d @ %d]", block.blockNo,
+					file_name, block.payloadSize, block.fileSize, block.targetAddr);
 		}
 
 		if ((block.flags & FAMILY_ID) != 0) {
@@ -198,17 +226,43 @@ static bool uf2_parse(RIO *io, RBuffer* rbuf, char *str) {
 
 		if ((block.flags & MD5_CHECKSUM) != 0) {
 			R_LOG_WARN ("uf2: Found MD5_CHECKSUM flag @ block #%d, TODO", block.blockNo);
+			// the last 24 bytes of data[] hold the following structure:
+			// Offset | Size | Value
+			// 0      | 4    | Start address of region
+			// 4      | 4    | Length of region in bytes
+			// 8      | 16   | MD5 checksum in binary format
 		}
 
 		if ((block.flags & EXTENSION_TAGS) != 0) {
-			R_LOG_WARN ("uf2: Found EXTENSION_TAGS flag @ block #%d, TODO", block.blockNo);
-			// uint32_t tagsOffset = 32 + block.payloadSize;
+			// Extension tags can, but don't have to, be repeated in all blocks.
+			R_LOG_WARN ("uf2: Found EXTENSION_TAGS flag @ block #%d", block.blockNo);
+			uint16_t offset = block.payloadSize;
+			while (offset < 476) {
+				uint32_t tag_sz = *(uint32_t *)(block.data + offset);
+				uint32_t tag = (tag_sz >> 8) & 0xffffff;
+				uint8_t size = (uint8_t)(tag_sz & 0xff);
+				switch (tag) {
+				case ETAG_FW_VERSION:
+				case ETAG_FW_CHECKSUM:
+				case ETAG_DESCRIPTION:
+				case ETAG_DEVICE_ID:
+				case ETAG_PAGE_SIZE:
+				default:
+					R_LOG_WARN ("uf2: Unknown EXTENSION TAG 0x%04x, TODO", tag);
+					// TODO dump size
+					break;
+				}
+				// Every tag starts at 4 byte boundary
+				offset += pad (size, 4);
+			}
 		}
 
 		if (r_buf_write_at (rbuf, block.targetAddr, block.data, block.payloadSize) != block.payloadSize) {
 			R_LOG_ERROR ("uf2: Sparse buffer problem, giving up");
 			return false;
-		} else if (has_debug) {
+		}
+
+		if (has_debug) {
 			R_LOG_DEBUG ("uf2: Block #%02d (%d bytes @ 0x%08x)", block.blockNo, block.payloadSize, block.targetAddr);
 		}
 
