@@ -8,6 +8,7 @@ LDFLAGS=-shared -L$(shell r2 -H R2_LIBDIR) -lr_anal
 OBJS=$(NAME).o
 LIB=$(NAME).$(LIBEXT)
 CWD=$(shell pwd)
+ELF_FILES=$(wildcard data/*.elf)
 
 all: $(LIB) uf2families.sdb compile_flags.txt
 
@@ -31,12 +32,6 @@ install-symlink: $(LIB)
 uninstall:
 	rm -f $(R2_PLUGIN_PATH)/$(LIB)
 
-test: $(LIB) uf2families.sdb
-	@r2 -l uf2_plugin.so -L | grep uf2
-	@r2 -N -q -c 's main; s' data/blink.elf
-	@echo "elf `r2 -N -q -c 's 0x1000035c; af; p8f' data/blink.elf`"
-	@echo "uf2 `r2 -N -q -c 's 0x1000035c; af; p8f' -l uf2_plugin.so uf2://data/blink.uf2`"
-
 uf2families.sdb.txt: uf2families.json
 	@python3 uf2families_to_sdb.py > $@
 
@@ -51,4 +46,24 @@ compile_flags.txt:
 	echo "-L$(shell r2 -H R2_LIBDIR)" >> $@
 	echo "-lr_anal" >> $@
 
-.PHONY: all clean install install-symlink uninstall test
+test: $(LIB) test_load $(ELF_FILES)
+
+test_load:
+	@r2 -l uf2_plugin.so -L | grep uf2
+
+$(ELF_FILES):
+	$(eval OFFSET := $(shell r2 -N -q -c 's main; s' $@))
+	@printf "[i] main @ ${OFFSET} in $@ "
+	$(eval ELF_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' $@))
+	$(eval UF2_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' -l uf2_plugin.so uf2://$(@:.elf=.uf2)))
+	@if [ "${ELF_MAIN}" = "${UF2_MAIN}" ]; then\
+		echo "Ok";\
+	else\
+		printf "\r[E] main @ ${OFFSET} in $@ ";\
+		echo "ERROR";\
+		echo "elf ${ELF_MAIN}";\
+		echo "uf2 ${UF2_MAIN}";\
+		echo;\
+	fi
+
+.PHONY: all clean install install-symlink uninstall test test_load $(ELF_FILES)
