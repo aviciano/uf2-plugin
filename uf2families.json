@@ -2,22 +2,26 @@
     {
         "id": "0x16573617",
         "short_name": "ATMEGA32",
-        "description": "Microchip (Atmel) ATmega32"
+        "description": "Microchip (Atmel) ATmega32",
+        "arch": "avr", "bits": 8
     },
     {
         "id": "0x1851780a",
         "short_name": "SAML21",
-        "description": "Microchip (Atmel) SAML21"
+        "description": "Microchip (Atmel) SAML21",
+        "arch": "arm", "bits": 32, "cpu": "cortex"
     },
     {
         "id": "0x1b57745f",
         "short_name": "NRF52",
-        "description": "Nordic NRF52"
+        "description": "Nordic NRF52",
+        "arch": "arm", "bits": 32, "cpu": "cortex"
     },
     {
         "id": "0x1c5f21b0",
         "short_name": "ESP32",
-        "description": "ESP32"
+        "description": "ESP32",
+        "arch": "xtensa", "bits": 32
     },
     {
         "id": "0x1e1f432d",
@@ -152,27 +156,32 @@
     {
         "id": "0xbfdd4eee",
         "short_name": "ESP32S2",
-        "description": "ESP32-S2"
+        "description": "ESP32-S2",
+        "arch": "xtensa", "bits": 32
     },
     {
         "id": "0xc47e5767",
         "short_name": "ESP32S3",
-        "description": "ESP32-S3"
+        "description": "ESP32-S3",
+        "arch": "xtensa", "bits": 32
     },
     {
         "id": "0xd42ba06c",
         "short_name": "ESP32C3",
-        "description": "ESP32-C3"
+        "description": "ESP32-C3",
+        "arch": "riscv", "bits": 32
     },
     {
         "id": "0x2b88d29c",
         "short_name": "ESP32C2",
-        "description": "ESP32-C2"
+        "description": "ESP32-C2",
+        "arch": "riscv", "bits": 32
     },
     {
         "id": "0x332726f6",
         "short_name": "ESP32H2",
-        "description": "ESP32-H2"
+        "description": "ESP32-H2",
+        "arch": "riscv", "bits": 32
     },
     {
         "id": "0xe48bff56",
