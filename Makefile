@@ -46,16 +46,16 @@ compile_flags.txt:
 	echo "-L$(shell r2 -H R2_LIBDIR)" >> $@
 	echo "-lr_anal" >> $@
 
-test: $(LIB) test_load $(ELF_FILES)
+test: test_load $(ELF_FILES)
 
-test_load:
-	@r2 -l uf2_plugin.so -L | grep uf2
+test_load: $(LIB)
+	@r2 -l ./uf2_plugin.so -L | grep uf2
 
-$(ELF_FILES):
+$(ELF_FILES): $(LIB)
 	$(eval OFFSET := $(shell r2 -N -q -c 's main; s' $@))
 	@printf "[i] main @ ${OFFSET} in $@ "
 	$(eval ELF_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' $@))
-	$(eval UF2_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' -l uf2_plugin.so uf2://$(@:.elf=.uf2)))
+	$(eval UF2_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' -l ./uf2_plugin.so uf2://$(@:.elf=.uf2)))
 	@if [ "${ELF_MAIN}" = "${UF2_MAIN}" ]; then\
 		echo "Ok";\
 	else\
