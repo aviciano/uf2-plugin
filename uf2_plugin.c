@@ -288,10 +288,12 @@ static bool __resize(RIO *io, RIODesc *desc, ut64 size) {
 }
 
 RIOPlugin r_io_plugin_uf2 = {
-	.name = "uf2",
-	.desc = "uf2 io plugin",
+	.meta = {
+		.name = "uf2",
+		.desc = "uf2 io plugin",
+		.license = "LGPL3",
+	},
 	.uris = "uf2://",
-	.license = "LGPL3",
 	.open = __open,
 	.close = __close,
 	.read = __read,
