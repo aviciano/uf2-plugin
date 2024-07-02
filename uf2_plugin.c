@@ -131,8 +131,10 @@ static void dump(UF2_Block *block) {
 
 static void process_family_id (RCore *core, uint32_t family_id) {
 	Sdb *sdb = sdb_new0 ();
+
+	// FIXME
 	if (sdb_open (sdb, "uf2families.sdb") < 0) {
-		R_LOG_ERROR ("uf2: uf2families.sdb not found");
+		R_LOG_WARN ("uf2: uf2families.sdb not found");
 	} else {
 		const char *id = r_str_newf ("0x%08x", family_id);
 		const char *name = sdb_array_get (sdb, id, 0, NULL);
