@@ -10,15 +10,13 @@ LIB=$(NAME).$(LIBEXT)
 CWD=$(shell pwd)
 ELF_FILES=$(wildcard data/*.elf)
 
-all: $(LIB) uf2families.sdb compile_flags.txt
+all: $(LIB) compile_flags.txt
 
 clean:
 	rm -f $(LIB) $(OBJS)
 	rm -f compile_flags.txt
-	rm -f uf2families.sdb
-	rm -f uf2families.sdb.txt
 
-$(LIB): $(OBJS) uf2families.sdb
+$(LIB): $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) -o $(LIB)
 
 install: $(LIB)
@@ -31,12 +29,6 @@ install-symlink: $(LIB)
 
 uninstall:
 	rm -f $(R2_PLUGIN_PATH)/$(LIB)
-
-uf2families.sdb.txt: uf2families.json
-	@python3 uf2families_to_sdb.py > $@
-
-uf2families.sdb: uf2families.sdb.txt
-	@sdb $@ = < $?
 
 compile_flags.txt:
 	touch $@
