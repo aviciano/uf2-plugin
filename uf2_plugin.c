@@ -5,13 +5,13 @@
 #include <r_lib.h>
 #include <r_types.h>
 
-#define UF2_MAGIC_START0 0x0A324655UL // "UF2\n"
-#define UF2_MAGIC_START1 0x9E5D5157UL // Randomly selected
-#define UF2_MAGIC_END 0x0AB16F30UL    // Ditto
-
 // Little endian is used, as most microcontrollers are little endian.
 // https://github.com/Microsoft/uf2
 // https://github.com/raspberrypi/picotool/issues/8
+
+#define UF2_MAGIC_START0 0x0A324655UL // "UF2\n"
+#define UF2_MAGIC_START1 0x9E5D5157UL // Randomly selected
+#define UF2_MAGIC_END 0x0AB16F30UL    // Ditto
 
 enum UF2_Flags {
 	NOT_MAIN_FLASH = 0x1 << 0,
@@ -47,54 +47,6 @@ typedef struct {
 	uint32_t magicEnd;    // Final magic number, 0x0AB16F30
 } UF2_Block;
 
-typedef struct {
-	int fd;
-	RBuffer *rbuf;
-} Ruf2;
-
-static bool __check(RIO *io, const char *pathname, bool many) {
-	return (!strncmp (pathname, "uf2://", 6));
-}
-
-static RIODesc *__open(RIO *io, const char *pathname, int rw, int mode);
-
-static int __read(RIO *io, RIODesc *desc, ut8 *buf, int count) {
-	if (!desc || !desc->data || (count <= 0)) {
-		return -1;
-	}
-	Ruf2 *mal = desc->data;
-	memset (buf, io->Oxff, count);
-	int r = r_buf_read_at (mal->rbuf, io->off, buf, count);
-	if (r >= 0) {
-		r_buf_seek (mal->rbuf, r, R_BUF_CUR);
-	}
-	return r;
-}
-
-static bool __close(RIODesc *desc) {
-	if (!desc || !desc->data) {
-		return false;
-	}
-	Ruf2 *mal = desc->data;
-	r_buf_free (mal->rbuf);
-	free (mal);
-	desc->data = NULL;
-	return true;
-}
-
-static ut64 __lseek(RIO *io, RIODesc *desc, ut64 offset, int whence) {
-	if (!desc || !desc->data) {
-		return -1;
-	}
-	Ruf2 *mal = desc->data;
-	io->off = r_buf_seek (mal->rbuf, offset, whence);
-	return io->off;
-}
-
-static int __write(RIO *io, RIODesc *desc, const ut8 *buf, int count) {
-	return -1;
-}
-
 #if 0
 static void dump(UF2_Block *block) {
 	// Family ID https://github.com/microsoft/uf2/blob/master/utils/uf2families.json
@@ -121,15 +73,19 @@ static void dump(UF2_Block *block) {
 	int i = 0;
 	while (i < block->payloadSize) {
 		eprintf ("%02x ", block->data[i++] & 0xff);
-		if (i % 16 == 0) eprintf("\n");
+		if (i % 16 == 0) {
+			eprintf("\n");
+		}
 	}
-	if (i % 16 != 0) eprintf("\n");
+	if (i % 16 != 0) {
+		eprintf("\n");
+	}
 	eprintf ("- magicEnd    : 0x%08x\n", block->magicEnd);    // Final magic number, 0x0AB16F30
 	eprintf ("\n");
 }
 #endif
 
-static void process_family_id (RCore *core, uint32_t family_id) {
+static void process_family_id(RCore *core, uint32_t family_id) {
 	Sdb *sdb = sdb_new0 ();
 
 	// FIXME
@@ -144,9 +100,18 @@ static void process_family_id (RCore *core, uint32_t family_id) {
 		const char *cpu = sdb_array_get (sdb, id, 4, NULL);
 		R_LOG_DEBUG ("uf2: Family ID %s => { name:%s, desc:%s, arch:%s, bits:%s, cpu:%s }",
 				id, name, desc, arch, bits, cpu);
-		if (arch && arch[0] != '\0') r_core_cmdf (core, "e asm.arch=%s", arch);
-		if (bits && bits[0] != '\0') r_core_cmdf (core, "e asm.bits=%s", bits);
-		if (cpu && cpu[0] != '\0') r_core_cmdf (core, "e asm.cpu=%s", cpu);
+
+		if (arch && arch[0] != '\0') {
+			r_core_cmdf (core, "e asm.arch=%s", arch);
+		}
+
+		if (bits && bits[0] != '\0') {
+			r_core_cmdf (core, "e asm.bits=%s", bits);
+		}
+
+		if (cpu && cpu[0] != '\0') {
+			r_core_cmdf (core, "e asm.cpu=%s", cpu);
+		}
 	}
 	sdb_free (sdb);
 }
@@ -278,40 +243,16 @@ static bool uf2_parse(RIO *io, RBuffer *rbuf, char *str) {
 	return true;
 }
 
-static bool __resize(RIO *io, RIODesc *desc, ut64 size) {
-	if (!desc) {
-		return false;
-	}
-	Ruf2 *mal = desc->data;
-	if (!mal) {
-		return false;
-	}
-	return r_buf_resize (mal->rbuf, size);
+typedef struct {
+	int fd;
+	RBuffer *rbuf;
+} Ruf2;
+
+extern RIOPlugin r_io_plugin_uf2;
+
+static bool __check(RIO *io, const char *pathname, bool many) {
+	return (!strncmp (pathname, "uf2://", 6));
 }
-
-RIOPlugin r_io_plugin_uf2 = {
-	.meta = {
-		.name = "uf2",
-		.desc = "uf2 io plugin",
-		.license = "LGPL3",
-	},
-	.uris = "uf2://",
-	.open = __open,
-	.close = __close,
-	.read = __read,
-	.check = __check,
-	.seek = __lseek,
-	// .write = __write,
-	.resize = __resize,
-};
-
-#ifndef R2_PLUGIN_INCORE
-R_API RLibStruct radare_plugin = {
-	.type = R_LIB_TYPE_IO,
-	.data = &r_io_plugin_uf2,
-	.version = R2_VERSION
-};
-#endif
 
 static RIODesc *__open(RIO *io, const char *pathname, int rw, int mode) {
 	if (!__check(io, pathname, false)) {
@@ -347,4 +288,78 @@ static RIODesc *__open(RIO *io, const char *pathname, int rw, int mode) {
 	free (str);
 	return r_io_desc_new (io, &r_io_plugin_uf2, pathname, rw, mode, mal);
 }
+
+
+static int __read(RIO *io, RIODesc *desc, ut8 *buf, int count) {
+	if (!desc || !desc->data || (count <= 0)) {
+		return -1;
+	}
+	Ruf2 *mal = desc->data;
+	memset (buf, io->Oxff, count);
+	int r = r_buf_read_at (mal->rbuf, io->off, buf, count);
+	if (r >= 0) {
+		r_buf_seek (mal->rbuf, r, R_BUF_CUR);
+	}
+	return r;
+}
+
+static bool __close(RIODesc *desc) {
+	if (!desc || !desc->data) {
+		return false;
+	}
+	Ruf2 *mal = desc->data;
+	r_buf_free (mal->rbuf);
+	free (mal);
+	desc->data = NULL;
+	return true;
+}
+
+static ut64 __lseek(RIO *io, RIODesc *desc, ut64 offset, int whence) {
+	if (!desc || !desc->data) {
+		return -1;
+	}
+	Ruf2 *mal = desc->data;
+	io->off = r_buf_seek (mal->rbuf, offset, whence);
+	return io->off;
+}
+
+static int __write(RIO *io, RIODesc *desc, const ut8 *buf, int count) {
+	return -1;
+}
+
+
+static bool __resize(RIO *io, RIODesc *desc, ut64 size) {
+	if (!desc) {
+		return false;
+	}
+	Ruf2 *mal = desc->data;
+	if (!mal) {
+		return false;
+	}
+	return r_buf_resize (mal->rbuf, size);
+}
+
+RIOPlugin r_io_plugin_uf2 = {
+	.meta = {
+		.name = "uf2",
+		.desc = "uf2 io plugin",
+		.license = "LGPL3",
+	},
+	.uris = "uf2://",
+	.open = __open,
+	.close = __close,
+	.read = __read,
+	.check = __check,
+	.seek = __lseek,
+	// .write = __write,
+	.resize = __resize,
+};
+
+#ifndef R2_PLUGIN_INCORE
+R_API RLibStruct radare_plugin = {
+	.type = R_LIB_TYPE_IO,
+	.data = &r_io_plugin_uf2,
+	.version = R2_VERSION
+};
+#endif
 
