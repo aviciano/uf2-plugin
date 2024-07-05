@@ -1,9 +1,6 @@
 /* radare - LGPL - Copyright 2023 - aviciano */
 
 #include <r_core.h>
-#include <r_io.h>
-#include <r_lib.h>
-#include <r_types.h>
 
 // Little endian is used, as most microcontrollers are little endian.
 // https://github.com/Microsoft/uf2
