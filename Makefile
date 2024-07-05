@@ -1,10 +1,10 @@
 NAME=uf2_plugin
 R2_PLUGIN_PATH=$(shell r2 -H R2_USER_PLUGINS)
 LIBEXT=$(shell r2 -H LIBEXT)
-# CFLAGS=-g -fPIC $(shell pkg-config --cflags r_anal)
-# LDFLAGS=-shared $(shell pkg-config --libs r_anal)
-CFLAGS=-g -fPIC -I$(shell r2 -H R2_INCDIR) -I$(shell r2 -H R2_INCDIR)/sdb/
-LDFLAGS=-shared -L$(shell r2 -H R2_LIBDIR) -lr_anal
+# CFLAGS=-g -fPIC $(shell pkg-config --cflags r_core)
+# LDFLAGS=-shared $(shell pkg-config --libs r_core)
+CFLAGS=-g -fPIC -I$(shell r2 -H R2_INCDIR)
+LDFLAGS=-shared -L$(shell r2 -H R2_LIBDIR) -lr_core
 OBJS=$(NAME).o
 LIB=$(NAME).$(LIBEXT)
 CWD=$(shell pwd)
@@ -36,18 +36,18 @@ compile_flags.txt:
 	echo "-I$(shell r2 -H R2_INCDIR)/sdb" >> $@
 	echo "-I$(shell r2 -H R2_INCDIR)" >> $@
 	echo "-L$(shell r2 -H R2_LIBDIR)" >> $@
-	echo "-lr_anal" >> $@
+	echo "-lr_core" >> $@
 
 test: test_load $(ELF_FILES)
 
 test_load: $(LIB)
-	@r2 -l ./uf2_plugin.so -L | grep uf2
+	@r2 -l ./$< -L | grep uf2
 
 $(ELF_FILES): $(LIB)
 	$(eval OFFSET := $(shell r2 -N -q -c 's main; s' $@))
 	@printf "[i] main @ ${OFFSET} in $@ "
 	$(eval ELF_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' $@))
-	$(eval UF2_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' -l ./uf2_plugin.so uf2://$(@:.elf=.uf2)))
+	$(eval UF2_MAIN := $(shell r2 -N -q -c 's ${OFFSET}; af; p8f' -l ./$(LIB) uf2://$(@:.elf=.uf2)))
 	@if [ "${ELF_MAIN}" = "${UF2_MAIN}" ]; then\
 		echo "Ok";\
 	else\
