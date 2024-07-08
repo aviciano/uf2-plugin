@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2023 - aviciano */
+/* radare - LGPL - Copyright 2024 - aviciano */
 
 #include <r_core.h>
 
